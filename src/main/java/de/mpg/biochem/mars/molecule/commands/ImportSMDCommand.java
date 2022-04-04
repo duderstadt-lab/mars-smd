@@ -33,6 +33,8 @@ import java.awt.Choice;
 import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
@@ -45,6 +47,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.JRadioButton;
 
 import org.decimal4j.util.DoubleRounder;
+import org.scijava.ItemIO;
 import org.scijava.ItemVisibility;
 import org.scijava.app.StatusService;
 import org.scijava.command.Command;
@@ -58,8 +61,13 @@ import org.scijava.plugin.Plugin;
 import org.scijava.ui.UIService;
 import org.scijava.widget.ChoiceWidget;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import de.mpg.biochem.mars.image.Peak;
 import de.mpg.biochem.mars.metadata.MarsMetadata;
+import de.mpg.biochem.mars.metadata.MarsOMEMetadata;
 import de.mpg.biochem.mars.molecule.AbstractMoleculeArchive;
 import de.mpg.biochem.mars.molecule.Molecule;
 import de.mpg.biochem.mars.molecule.MoleculeArchive;
@@ -67,8 +75,10 @@ import de.mpg.biochem.mars.molecule.MoleculeArchiveIndex;
 import de.mpg.biochem.mars.molecule.MoleculeArchiveProperties;
 import de.mpg.biochem.mars.molecule.MoleculeArchiveService;
 import de.mpg.biochem.mars.molecule.SingleMolecule;
+import de.mpg.biochem.mars.molecule.SingleMoleculeArchive;
 import de.mpg.biochem.mars.table.MarsTable;
 import de.mpg.biochem.mars.util.LogBuilder;
+import de.mpg.biochem.mars.util.MarsMath;
 import net.imagej.ops.Initializable;
 import org.scijava.table.DoubleColumn;
 
@@ -82,37 +92,19 @@ import javax.swing.JLabel;
 		@Menu(label = "Import", weight = 110,
 			mnemonic = 'i'),
 		@Menu(label = "Single-molecule dataset (SMD)", weight = 10, mnemonic = 's')})
-public class GenerateBPSCommand extends DynamicCommand implements Command, Initializable {
+public class ImportSMDCommand extends DynamicCommand implements Command {
 
 	@Parameter
 	private LogService logService;
-
-    @Parameter
-    private StatusService statusService;
-
-	@Parameter
-    private MoleculeArchiveService moleculeArchiveService;
-
-	@Parameter
-    private UIService uiService;
-	//@Parameter(label = "X Column", choices = { "a", "b", "c" })
-	//private String xColumn;
-
-	@Override
-	public void initialize() {
-		//ArrayList<String> columns = new ArrayList<String>();
-		//columns.addAll(moleculeArchiveService.getArchives().get(0).properties()
-		//	.getColumnSet());
-		//columns.sort(String::compareToIgnoreCase);
-
-		//final MutableModuleItem<String> xColumnItems = getInfo().getMutableInput(
-		//	"xColumn", String.class);
-		//xColumnItems.setChoices(columns);
-
-		//final MutableModuleItem<String> yColumnItems = getInfo().getMutableInput(
-		//	"yColumn", String.class);
-		//yColumnItems.setChoices(columns);
-	}
+	
+	@Parameter(label = "Single-molecule dataset (SMD) json file")
+	private File file;
+	
+	/**
+	 * OUTPUTS
+	 */
+	@Parameter(label = "Molecule Archive", type = ItemIO.OUTPUT)
+	private SingleMoleculeArchive archive;
 
 	@Override
 	public void run() {
@@ -130,31 +122,58 @@ public class GenerateBPSCommand extends DynamicCommand implements Command, Initi
 		//Output first part of log message...
 		logService.info(log);
 
-		//DO stuff here...
+		archive = new SingleMoleculeArchive("Imported SMD archive");
+		
+		String metaUID = MarsMath.getUUID58().substring(0, 10);
+		MarsOMEMetadata meta = archive.createMetadata(metaUID);
+		archive.putMetadata(meta);
 
+		ObjectMapper mapper = new ObjectMapper();
+		
+		try {
+			JsonNode jsonNode = mapper.readTree(file);
+			String desc = jsonNode.get("desc").asText();
+			String id = jsonNode.get("id").asText();
+			
+			JsonNode data = jsonNode.get("data");
+			for (JsonNode node : data) {
+				String record_id = node.get("id").asText();
+				
+				MarsTable table = new MarsTable(record_id);
+				
+				JsonNode index = node.get("index");
+				DoubleColumn iCol = new DoubleColumn("index");
+				for (JsonNode indexNode : index)
+					iCol.add(indexNode.doubleValue());
+					
+				table.add(iCol);
+				
+				JsonNode values = node.get("values");
+				values.fieldNames().forEachRemaining(field -> {
+					DoubleColumn col = new DoubleColumn(field);
+					JsonNode array = values.get(field);
+					for (JsonNode value : array)
+						col.add(value.doubleValue());
+					table.add(col);
+				});
+				
+				SingleMolecule molecule = archive.createMolecule(record_id, table);
+				molecule.setMetadataUID(metaUID);
+				archive.put(molecule);
+			}
+		} catch (JsonProcessingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		logService.info("Time: " + DoubleRounder.round((System.currentTimeMillis() - starttime)/60000, 2) + " minutes.");
 	    logService.info(LogBuilder.endBlock(true));
 	    archive.logln(LogBuilder.endBlock(true));
 	}
 
 	private void addInputParameterLog(LogBuilder builder) {
-		builder.addParameter("xxx", xxx;
-	}
-
-	public String[] list(String pathName) throws IOException {
-
-		if (pathName.equals(""))
-			pathName = "/";
-
-		try {
-			final List<String> members = reader.object().getGroupMembers(pathName);
-			return members.toArray(new String[members.size()]);
-		} catch (final Exception e) {
-			throw new IOException(e);
-		}
-	}
-
-	private void addInputParameterLog(LogBuilder builder) {
-		builder.addParameter("xxx", xxx);
+		builder.addParameter("File", file.getAbsolutePath());
 	}
 }

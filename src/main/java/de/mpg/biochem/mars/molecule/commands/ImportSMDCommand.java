@@ -1,8 +1,8 @@
 /*-
  * #%L
- * Importer for single-molecule dataset (SMD) in json format
+ * Mars importer to convert Single-molecule Dataset (SMD) format to Molecule Archive format
  * %%
- * Copyright (C) 2019 - 2021 Karl Duderstadt
+ * Copyright (C) 2022 Karl Duderstadt
  * %%
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,61 +28,30 @@
  */
 package de.mpg.biochem.mars.molecule.commands;
 
-import java.awt.AWTEvent;
-import java.awt.Choice;
-import java.awt.Panel;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Vector;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
-
-import javax.swing.ButtonGroup;
-import javax.swing.JRadioButton;
-
-import org.decimal4j.util.DoubleRounder;
-import org.scijava.ItemIO;
-import org.scijava.ItemVisibility;
-import org.scijava.app.StatusService;
-import org.scijava.command.Command;
-import org.scijava.command.DynamicCommand;
-import org.scijava.log.LogService;
-import org.scijava.menu.MenuConstants;
-import org.scijava.module.MutableModuleItem;
-import org.scijava.plugin.Menu;
-import org.scijava.plugin.Parameter;
-import org.scijava.plugin.Plugin;
-import org.scijava.ui.UIService;
-import org.scijava.widget.ChoiceWidget;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import de.mpg.biochem.mars.image.Peak;
-import de.mpg.biochem.mars.metadata.MarsMetadata;
+import java.io.File;
+import java.io.IOException;
+
+import org.decimal4j.util.DoubleRounder;
+import org.scijava.ItemIO;
+import org.scijava.command.Command;
+import org.scijava.command.DynamicCommand;
+import org.scijava.log.LogService;
+import org.scijava.menu.MenuConstants;
+import org.scijava.plugin.Menu;
+import org.scijava.plugin.Parameter;
+import org.scijava.plugin.Plugin;
+import org.scijava.table.DoubleColumn;
+
 import de.mpg.biochem.mars.metadata.MarsOMEMetadata;
-import de.mpg.biochem.mars.molecule.AbstractMoleculeArchive;
-import de.mpg.biochem.mars.molecule.Molecule;
-import de.mpg.biochem.mars.molecule.MoleculeArchive;
-import de.mpg.biochem.mars.molecule.MoleculeArchiveIndex;
-import de.mpg.biochem.mars.molecule.MoleculeArchiveProperties;
-import de.mpg.biochem.mars.molecule.MoleculeArchiveService;
 import de.mpg.biochem.mars.molecule.SingleMolecule;
 import de.mpg.biochem.mars.molecule.SingleMoleculeArchive;
 import de.mpg.biochem.mars.table.MarsTable;
 import de.mpg.biochem.mars.util.LogBuilder;
 import de.mpg.biochem.mars.util.MarsMath;
-import net.imagej.ops.Initializable;
-import org.scijava.table.DoubleColumn;
-
-import javax.swing.JLabel;
 
 @Plugin(type = Command.class, label = "Single-molecule dataset (SMD)", menu = {
 		@Menu(label = MenuConstants.PLUGINS_LABEL, weight = MenuConstants.PLUGINS_WEIGHT,
@@ -122,18 +91,19 @@ public class ImportSMDCommand extends DynamicCommand implements Command {
 		//Output first part of log message...
 		logService.info(log);
 
-		archive = new SingleMoleculeArchive("Imported SMD archive");
-		
-		String metaUID = MarsMath.getUUID58().substring(0, 10);
-		MarsOMEMetadata meta = archive.createMetadata(metaUID);
-		archive.putMetadata(meta);
-
 		ObjectMapper mapper = new ObjectMapper();
 		
 		try {
 			JsonNode jsonNode = mapper.readTree(file);
-			String desc = jsonNode.get("desc").asText();
-			String id = jsonNode.get("id").asText();
+			String datasetName = (jsonNode.has("desc")) ? jsonNode.get("desc").asText() : "Converted Single-molecule Dataset";
+		  String datasetId = (jsonNode.has("id")) ? jsonNode.get("id").asText() : MarsMath.getUUID58().substring(0, 10);
+		  String datasetAttr = (jsonNode.has("attr")) ? jsonNode.get("attr").asText() : "";
+			
+			archive = new SingleMoleculeArchive(datasetName);
+			
+			MarsOMEMetadata meta = archive.createMetadata(datasetId);
+			meta.setNotes(datasetAttr);
+			archive.putMetadata(meta);
 			
 			JsonNode data = jsonNode.get("data");
 			for (JsonNode node : data) {
@@ -158,19 +128,21 @@ public class ImportSMDCommand extends DynamicCommand implements Command {
 				});
 				
 				SingleMolecule molecule = archive.createMolecule(record_id, table);
-				molecule.setMetadataUID(metaUID);
+				molecule.setMetadataUID(datasetId);
+				if (node.has("attr")) molecule.setNotes(node.get("attr").asText());
 				archive.put(molecule);
 			}
 		} catch (JsonProcessingException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+			logService.info(LogBuilder.endBlock(false));
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
+			logService.info(LogBuilder.endBlock(false));
 		}
 		logService.info("Time: " + DoubleRounder.round((System.currentTimeMillis() - starttime)/60000, 2) + " minutes.");
-	    logService.info(LogBuilder.endBlock(true));
-	    archive.logln(LogBuilder.endBlock(true));
+	  logService.info(LogBuilder.endBlock(true));
+	  archive.logln(log);
+	  archive.logln(LogBuilder.endBlock(true));
 	}
 
 	private void addInputParameterLog(LogBuilder builder) {

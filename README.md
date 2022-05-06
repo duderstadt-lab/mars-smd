@@ -16,5 +16,9 @@ If you encounter problems, first confirm the example.json file in this repositor
 
 This command was developed using the example.json file provided. We would be happy to update the command if the specification is somehow different in your files.
 
+###Groovy SMD import script
+
+For quick editing of the import procedure, a scripts folder with an ImportSMD.groovy script is included in this repository. This script can be used in the Fiji script editor to perform the same import procedure. The script is included to provide the possibility to modify the import fields or structure. The script requires the Mars jars to be installed from the update site.
+
 Mars documentation can be found at https://duderstadt-lab.github.io/mars-docs/
 

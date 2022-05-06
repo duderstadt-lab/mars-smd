@@ -2,7 +2,7 @@
 
 ## Mars Single-molecule Dataset (SMD) format importer
 
-The groups of Dan Herschlag and Ruben Gonzalez developed the Single-molecule Dataset (SMD) format to facilitate publication and exchange of time-series data and analysis results from single-molecule FRET studies. This repository contains a Fiji/ImageJ2 command that converts json text files in [Single-molecule Dataset (SMD)](https://smdata.github.io) format to Mars Molecule Archives.
+The groups of [Dan Herschlag](http://herschlaglab.stanford.edu) and [Ruben Gonzalez](http://www.columbia.edu/cu/chemistry/groups/gonzalez/index.html) developed the Single-molecule Dataset (SMD) format to facilitate publication and exchange of time-series data and analysis results from single-molecule FRET studies. This repository contains a Fiji/ImageJ2 command that converts json text files in [Single-molecule Dataset (SMD)](https://smdata.github.io) format to Mars Molecule Archives.
 
 A full explanation of the SMD file specification can be found in the publication.
 
